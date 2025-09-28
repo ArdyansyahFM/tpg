@@ -1,0 +1,103 @@
+---
+title: "TPG Prak 6"
+author: "Fahmim"
+date: "2025-09-24"
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+---
+
+# Analisis Multivariat pada A/B Testing untuk jumlah pengunjung perpuskaan: Uji Hotelling T² untuk JP dan JBD
+
+Oleh Fahmi Maulana Ardyansyah (G1401231040)
+
+24 September 2025
+
+# Studi kasus pengunjung perpustakaan sebelum dan sesudah perpustakaan direnovasi
+Sebuah perpustakaan aktif mengumpulkan data jumlah kunjungan harian perpustakaan. Pihak pengelola perpustakaan ingin mengetahui apakah ada peningkatan jumlah pengunjung setelah dilakukan renovasi terhadap bangunan perpustakaan.
+
+* Grup A: sebelum perpustakaan direnovasi
+* Grub B: setelah perpustakaan direnovasi
+
+dua besaran yang diukur:
+
+1. JP: Jumlah pengunjung (per bulan)
+2. JBD: Jumlah buku dipinjam (per bulan)
+
+Hipotesis (dua vektor rataan, saling bebas, dan ragam sama)
+
+$$
+H_0 : \mu_A = \mu_B
+$$
+$$
+H_1 : \mu_A \neq \mu_B
+$$
+
+
+## 1. Pembangkitan data
+```{r}
+set.seed(040)
+library(MASS)
+
+n1 <- 30
+n2 <- 28
+
+mu_A <- c(10, 50)
+mu_B <- c(12, 55)
+Sigma <- matrix(c(25, 8,
+                  8, 36), 2, 2, byrow = TRUE)
+
+A <- mvrnorm(n1, mu = mu_A, Sigma = Sigma)
+B <- mvrnorm(n2, mu = mu_B, Sigma = Sigma)
+
+colnames(A) <- colnames(B) <- c("JP","JBD")
+head(A); head(B)
+```
+## 2. Penghitungan rataan
+```{r}
+xbar1 <- colSums(A) / n1
+xbar2 <- colSums(B) / n2
+mu_hat <- xbar1 - xbar2
+xbar1; xbar2; mu_hat
+```
+
+## 3. Pembuatan matriks kovarians per grup
+```{r}
+center1 <- scale(A, center = xbar1, scale = FALSE)
+S1 <- t(center1) %*% center1 / (n1 - 1)
+
+center2 <- scale(B, center = xbar2, scale = FALSE)
+S2 <- t(center2) %*% center2 / (n2 - 1)
+
+S1; S2
+```
+
+## 4. Pembuatan matriks kovarians gabungan
+```{r}
+Sp <- ((n1-1)*S1 + (n2-1)*S2) / (n1 + n2 - 2)
+Sp
+```
+
+## 5. Perhitungan statistik uji T^2
+```{r}
+p  <- 2
+T2 <- (n1*n2/(n1+n2)) * t(mu_hat) %*% solve(Sp) %*% mu_hat
+Fh <- as.numeric(((n1+n2-p-1)/(p*(n1+n2-2))) * T2)
+T2; Fh
+```
+
+## 6. Transformasi ke statistik F
+```{r}
+Fcrit <- qf(0.95, df1 = 2, df2 = 55)
+pval  <- 1 - pf(Fh, df1 = 2, df2 = 55)
+Fcrit; pval
+```
+
+## 7. Interpretasi
+Hasil uji menunjukkan bahwa nilai $\text{F}_{hitung} > \text{F}_{kritis} = 3.165$ dan nilai _p-value_ <0.05, sehingga **tolak $H_0$ pada taraf nyata 5%**.
+
+Artinya, secara multivariat (JB dan JBD secara bersamaan) **terdapat perbedaan signifikan** antara grup A (sebelum renovasi) dan grup B (setelah renovasi).
+
+berdasarkan selisih rata-rata sampel, grup B (setelah direnovasi) memiliki nilai Jp dan JBD lebih tinggi daripada grup A, sehingga dapat dikatakan bahwa **renovasi gedung perpustakaan terbukti meningkatkan jumlah pengunjung dan jumlah buku dipinjam per bulannya**.
