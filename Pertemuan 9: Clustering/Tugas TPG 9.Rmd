@@ -1,0 +1,206 @@
+---
+title: "Tugas TPG 9"
+author: "Fahmim"
+date: "2025-11-12"
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+---
+
+
+# Library yang diperlukan
+```{r setup, message=FALSE, warning=FALSE}
+library(cluster)
+library(factoextra)
+library(clusterCrit)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(scales)
+library(readxl)
+library(RColorBrewer)
+```
+
+# Baca Data
+```{r}
+data_raw <- read_excel("E:/(1) Projects/Semester 5/Teknik Peubah Ganda/AirQualityUCI.xlsx")
+head(data_raw)
+```
+
+# Pre-Processing
+```{r}
+data_scaled <- scale(data_raw)
+head(data_scaled)
+```
+
+# Metode clustering non-hierarki: K-Means CLustering
+
+## Penentuan jumlah cluster optimal
+Menentukan jumlah cluster terbaik (k) dapat menggunakan dua metode populer:
+
+Elbow Method: melihat titik siku (elbow point) pada grafik within-cluster sum of squares (WSS). 
+
+Silhouette Method: menilai kualitas pemisahan cluster; semakin tinggi nilai silhouette, semakin baik hasil clustering.
+
+### ELbow method
+```{r}
+fviz_nbclust(data_scaled, kmeans, method = "wss") +
+labs(title = "Elbow Method")
+```
+
+### Silhouette method
+```{r}
+fviz_nbclust(data_scaled, kmeans, method = "silhouette") +
+labs(title = "Silhouette Method")
+```
+
+## Penerapan Algoritma K-Means
+Setelah melihat dari pola menggunakan Elbow Method dan Silhoutte, diperoleh pengelompokan yang terbaik itu 3. Selabjutnya dilakukan proses clustering menggunakan fungsi kmeans().
+```{r}
+set.seed(1040)
+kmeans_air_result <- kmeans(data_scaled, centers = 3, nstart = 465)
+kmeans_air_result
+```
+
+## Hasil Clustering
+```{r}
+head(data.frame(Observasi = 1:length(kmeans_air_result$cluster),
+           Cluster = kmeans_air_result$cluster),10)
+```
+### Jumlah amatan setiap cluster
+```{r}
+table(kmeans_air_result$cluster)
+```
+
+### Label Cluster untuk setiap observasi
+```{r}
+kmeans_air_result$cluster
+```
+
+### Total keragaman dalam data
+```{r}
+kmeans_air_result$totss
+```
+
+### Keragaman dalam masing-masing cluster
+```{r}
+kmeans_air_result$withinss
+```
+
+### Total keragaman dalam cluster
+```{r}
+kmeans_air_result$tot.withinss
+```
+
+### Keragaman antar cluster
+```{r}
+kmeans_air_result$betweenss
+```
+
+###	Jumlah iterasi hingga konvergen
+```{r}
+kmeans_air_result$iter
+```
+
+## Evaluasi Clustering
+```{r}
+cluster_km_air <- kmeans_air_result$cluster
+dist_matrix_air <- dist(data_scaled, method = "euclidean")
+
+sil <- mean(silhouette(cluster_km_air, dist_matrix_air)[, 3])
+ch <- intCriteria(traj = as.matrix(data_scaled),
+part = cluster_km_air,
+crit = "Calinski_Harabasz")$calinski_harabasz
+dunn <- intCriteria(traj = as.matrix(data_scaled),
+part = cluster_km_air,
+crit = "Dunn")$dunn
+
+data.frame(Silhouette = sil,
+Calinski_Harabasz = ch,
+Dunn = dunn)
+```
+
+## Karakteristik CLustering
+```{r}
+data_air_clustered <- data.frame(data_raw, cluster = factor(cluster_km_air))
+
+cluster_air_summary <- data_air_clustered %>%
+group_by(cluster) %>%
+summarise(across(where(is.numeric), mean, .names = "{.col}"))
+
+cluster_air_summary
+```
+
+## Visualisasi Clustering
+### Plot CLustering
+```{r}
+fviz_cluster(kmeans_air_result, data= data_scaled,
+palette = "jco", geom = "point",
+main = "Visualisasi Hasil K-Means Clustering (3 Cluster)")
+```
+
+```{r}
+heat_data_air <- cluster_air_summary %>%
+pivot_longer(-cluster, names_to = "Variabel", values_to = "Rata2")
+heat_data_air
+```
+
+Berdasarkan hasil clustering dan visualisasi tersebut, dapat disimpulkan bahwa *clustering 1 (Biru) merupakan Zona Udara Sangat Terpolusi (Polusi Tinggi)*. Cluster ini memiliki rata-rata $\text{CO(GT)}$ (4.10) dan $\text{NOx(GT)}$ (254) yang jauh lebih tinggi dibandingkan cluster lainnya. Cluster 1 mewakili kondisi atau periode waktu di mana kualitas udara berada pada tingkat terburuk atau paling terpolusi.
+
+Sedangkan, *clustering 2 (Kuning) Zona Udara Terpolusi Sedang (Polusi Menengah)*. Nilai rata-rata $\text{CO(GT)}$ (2.32) dan $\text{NOx(GT)}$ (140) berada di antara Cluster 1 dan Cluster 3. Cluster 2 mewakili kondisi kualitas udara yang moderat atau menengah. Ini bisa menjadi kondisi transisi antara polusi tinggi dan rendah.
+
+Terakhir, *clustering 3 Zona Udara Relatif Bersih (Polusi Rendah)*. Cluster ini memiliki rata-rata $\text{CO(GT)}$ (1.46) dan $\text{NOx(GT)}$ (94.3) yang paling rendah di antara ketiga cluster. Cluster 3 mewakili kondisi atau periode waktu di mana kualitas udara berada pada tingkat terbaik atau relatif paling bersih.
+
+Ketiga cluster ($\text{1}, \text{2}, \text{3}$) terpisah dengan cukup jelas di ruang dimensi $\text{Dim1}$ dan $\text{Dim2}$ (yang merupakan dua Komponen Utama/PCA yang menjelaskan $\text{57.9\%} + \text{36.7\%} = \text{94.6\%}$ dari total variansi data). Ini mengindikasikan bahwa hasil clustering valid karena polanya cukup kuat.
+
+Plot ini mendukung hasil tabel rata-rata. Tiga kelompok amatan yang berbeda telah berhasil diidentifikasi, dan berdasarkan tabel, perbedaan utama antar kelompok tersebut adalah tingkat polusi udara.
+
+### Heatmap Clustering
+```{r}
+ggplot(heat_data_air, aes(x = Variabel, y = cluster, fill = Rata2)) +
+geom_tile(color = "white") +
+scale_fill_gradientn(colors = c("#56B1F7", "white", "#FF6B6B")) +
+labs(title = "Heatmap Karakteristik Cluster",
+x = "Variabel", y = "Cluster") +
+theme_minimal(base_size = 12) +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+ggplot(heat_data_air, aes(x = Variabel, y = Rata2, fill = cluster)) +
+geom_bar(stat = "identity", position = "dodge") +
+scale_fill_brewer(palette = "Set2") +
+labs(title = "Heatmap Karakteristik Cluster",
+x = "Variabel", y = "Rata-rata Nilai") +
+theme_minimal(base_size = 12) +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Pada kedua heatmap, variabel $\text{CO.GT.}$ dan $\text{NOx.GT.}$ menunjukkan pola yang hampir identik:
+
+Cluster 1 (Merah/Hijau Terang): Memiliki rata-rata tertinggi untuk $\text{CO.GT.}$ dan $\text{NOx.GT.}$.Cluster 1 dicirikan oleh tingkat polusi udara yang sangat tinggi (baik Karbon Monoksida maupun Nitrogen Oksida).
+
+Cluster 3 (Biru Tergelap): Memiliki rata-rata terendah untuk $\text{CO.GT.}$ dan $\text{NOx.GT.}$. Cluster 3 dicirikan oleh kualitas udara yang terbaik atau paling rendah polusinya.
+
+Cluster 2 (Putih/Oranye): Memiliki rata-rata menengah untuk kedua polutan tersebut.Cluster 2 mewakili kondisi polusi udara sedang/moderat.
+
+Pola ini mengkonfirmasi interpretasi sebelumnya: K-Means berhasil membagi data menjadi tiga tingkatan kualitas udara: Buruk (Cluster 1), Sedang (Cluster 2), dan Baik (Cluster 3).
+
+Variabel $\text{RH}$ dan $\text{T}$ menunjukkan pola yang berbeda dari polutan, yang membantu membedakan Cluster 2 dan 3 lebih lanjut.
+
+Cluster 3: Memiliki rata-rata $\text{RH}$ tertinggi (sekitar $\text{55\% - 60\%}$).
+
+Cluster 1: Memiliki rata-rata $\text{RH}$ menengah (sekitar $\text{50\%}$).
+
+Cluster 2: Memiliki rata-rata $\text{RH}$ terendah (sekitar $\text{30\% - 40\%}$).
+
+Cluster 2: Memiliki rata-rata $\text{T}$ tertinggi (sekitar $\text{25}^\circ\text{C}$).
+
+Cluster 1: Memiliki rata-rata $\text{T}$ menengah (sekitar $\text{15}^\circ\text{C}$).
+
+Cluster 3: Memiliki rata-rata $\text{T}$ terendah (sekitar $\text{10}^\circ\text{C}$).
+
+# Kesimpulan
+*Cluster 1* mendefinisikan amatan ketika polusi mencapai puncaknya, terlepas dari faktor suhu dan kelembaban (yang berada di nilai tengah). *Cluster 2* mendefinisikan amatan ketika lingkungan berada dalam kondisi panas dan kering (T tinggi, RH rendah), yang bersamaan dengan tingkat polusi sedang. *Cluster 3* mendefinisikan amatan ketika lingkungan dingin dan lembab (T rendah, RH tinggi), yang berasosiasi dengan tingkat polusi terendah.
