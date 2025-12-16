@@ -1,0 +1,218 @@
+---
+title: 'Analisis Korespondensi: Klasifikasi Silang Gender dan Preferensi Partai'
+author: "Fahmim"
+date: "2025-12-16"
+output: 
+  html_document:
+    theme: cerulean
+    toc: true
+    toc_float: true
+---
+
+# Pengantar
+Analisis korespondensi merupakan sebuah teknik multivariat yang digunakan untuk mengeksplorasi dan mempelajari hubungan peubah-peubah kualitatif dengan cara mereduksi dimensi dan memetakannya ke dalam grafik dua dimensi. Konsepnya mirip dengan analisis komponen utama, namun digunakan pada peubah kategorik yang direpresentasikan pada tabel kontingensi. Analisis korespondensi digunakan untuk mendeteksi dan memberikan penjelasan tentang hubungan antara dua variabel di dalam data yang berbentuk matriks berdimensi besar dan dapat digunakan untuk mencari pengelompokan yang homogen dari individu.
+
+# Libraray yang Diperlukan
+```{r setup, message=FALSE, warning=FALSE}
+library(factoextra)
+library(FactoMineR)
+library(ggplot2)
+library(gplots)
+library(ca)
+```
+
+# Studi kasus: Klasifikasi Silang Gender dan Preferensi Partai
+Pada kasus ini, data yang digunakan adalah data Klasifikasi Silang Gender dan Preferensi Partai dari "2000 General Social Survey" yang dilaksanakan di Amerika Serikat. Dalam survei ini, responden dipetakan sesuai gender (pria atau wanita) dan preferensi partai (Demokrat, Independen, atau Republikan). Berikut adalah datanya.
+
+```{r}
+GSS <- matrix(c(762,327,468,484,239,477), nrow = 2, byrow = TRUE)
+colnames(GSS) = c("Demokrat", "Indepenen", "Republikan")
+rownames(GSS) = c("Wanita", "Pria")
+
+GSS
+``` 
+# Pengerjaan Manual
+## Tabel Kontingensi
+```{r}
+GSS
+```
+## Tabel Korespondensi
+```{r}
+n <- sum(GSS)
+n
+```
+
+## Vektor kolom dan vektor baris
+```{r}
+c <- colSums(GSS)
+c
+```
+
+```{r}
+r <- rowSums(GSS)
+r
+```
+## Matriks kolom dan matriks baris
+```{r}
+Dc <- diag(c)
+Dc
+```
+```{r}
+Dr <- diag(r)
+Dr
+```
+
+## Analisis profil baris
+```{r}
+R <- solve(Dr)%*%GSS
+rownames(R) <- rownames(GSS)
+R
+```
+```{r}
+mass_c <- colSums(R)
+mass_c
+```
+
+Pada kolom partai Demokrat dan Independen, nilai wanita lebih tinggi daripada nilai pria. Hal ini menunjukkan bahwa partai Demokrat dan Independen didominasi oleh pemilih wanita, sedangkan partai Republikan didominasi oleh pemilih pria.
+
+## Analisis profil kolom
+```{r}
+C <- GSS%*%solve(Dc)
+colnames(C) <- colnames(GSS)
+C
+```
+```{r}
+mass_r <- rowSums(C)
+mass_r
+```
+
+Pada baris wanita, partai Demokrat memiliki nilai yang paling tinggi daripada 2 lainnya. Hal ini menunjukkan bahwa massa terbesar wanita terdapat pada partai Demokrat. 
+
+Pada baris pria, partai Republikan memiliki nilai yang paling tinggi daripada 2 lainnya. Hal ini menunjukkan bahwa massa terbesar pria terdapat pada partai Republikan. 
+
+## Menentukan koordinat profil baris dan kolom
+```{r}
+Prc <- GSS - r%*%t(c)
+Prc
+```
+Kemudian matriks Z diperoleh melalui:
+```{r}
+Z <- diag(1/sqrt(diag(Dr)))%*%Prc%*%diag(1/sqrt(diag(Dc)))
+Z
+```
+
+```{r}
+Du <- diag(sqrt(eigen(Z %*% t(Z))$values))[1:2,1:2]
+Du
+```
+Kemudian dari matriks Z yang sudah diperoleh, dicari matriks U (vektor ciri dari ZZ’) dan matriks V (vektor ciri dari matriks Z’Z).
+```{r}
+U <- eigen(Z %*% t(Z))$vectors
+U
+```
+
+```{r}
+A <- (sqrt(Dr) %*% U)[,1:2]
+A
+```
+
+```{r}
+V <- eigen(t(Z) %*% Z)$vectors
+V
+```
+
+```{r}
+B <- (sqrt(Dc) %*% V)[,1:2]
+B
+```
+
+### Koordinat baris
+```{r}
+rows <- solve(Dr)%*%A%*%Du
+rows
+```
+
+### Koordinat kolom
+```{r}
+cols <- solve(Dc)%*%B%*%Du
+cols
+```
+
+## Visualisasi berdasarkan koordinat profil baris dan kolom
+```{r}
+row_df <- data.frame(rows)
+col_df <- data.frame(cols)
+colnames(row_df) <- c("Dim.1", "Dim.2")
+rownames(row_df) <- rownames(GSS)
+colnames(col_df) <- c("Dim.1", "Dim.2")
+rownames(col_df) <- colnames(GSS)
+row_df["Var"] <- "Gender"
+row_df["Size"] <- 2
+col_df["Var"] <- "Partai"
+col_df["Size"] <- 2
+ca.plot.df <- rbind(col_df, row_df)
+ca.plot.df["Label"] <- rownames(ca.plot.df)
+ca.plot.df
+```
+```{r}
+p <- ggplot(ca.plot.df, aes(x = Dim.1, y = Dim.2,
+                       col = Var, shape = Var,
+                       label = Label, size = Size)) +
+  geom_vline(xintercept = 0, lty = "dashed", alpha = .5) +
+  geom_hline(yintercept = 0, lty = "dashed", alpha = .5) +
+  geom_point() + geom_text(check_overlap = T, hjust=-0.15)
+
+plot(p)
+```
+# Pengerjaan dengan fungsi R
+## Uji uji Formal
+```{r}
+chisq <- chisq.test(GSS)
+chisq
+```
+Diperoleh dari hasil uji Khi-kuadrat, bahwa kedua peubah (Partai dan gender) secara signifikan saling terkait.
+```{r}
+model_partai <- CA(GSS, graph = F)
+print(model_partai)
+```
+
+## Akar ciri
+```{r}
+eig.val <- get_eigenvalue(model_partai)
+eig.val
+```
+## Presentase keragaman
+```{r}
+fviz_screeplot(model_partai, addlabels = TRUE)
+```
+Dapat dilihat bahwa untuk mereduksi menjadi 1 dimensi saja, kita sudah mendapatkan 100% keragaman dalam data.
+
+## Analisis dan visualisasi profil baris
+```{r}
+row <- get_ca_row(model_partai)
+row
+```
+
+```{r}
+row$coord
+```
+
+```{r}
+row$contrib
+```
+Hasil ini menunjukkan bahwa responden pria memberikan keragaman yang lebih besar daripada responden wanita.
+
+## Analisis dan visualisasi profil kolom
+```{r}
+col <- get_ca_col(model_partai)
+col
+```
+
+```{r}
+col$coord
+```
+```{r}
+col$contrib
+```
+Hasil ini menunjukkan bahwa partai Republikan memberikan keragaman yang lebih besar daripada partai lainnya.
+
